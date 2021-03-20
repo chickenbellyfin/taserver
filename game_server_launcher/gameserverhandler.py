@@ -18,7 +18,6 @@
 # along with taserver.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import ctypes
 import ctypes.wintypes
 import gevent
 import gevent.subprocess as sp
@@ -63,7 +62,7 @@ class GameServerTerminatedMessage:
 
 class GameServerHandler:
 
-    def __init__(self, game_server_config, ports, server_handler_queue, launcher_queue):
+    def __init__(self, game_server_config, ports, server_handler_queue, launcher_queue, data_root):
         gevent.getcurrent().name = 'gameserver'
 
         self.servers = {}
@@ -73,6 +72,7 @@ class GameServerHandler:
 
         self.logger = logging.getLogger(__name__)
         self.ports = ports
+        self.data_root = data_root
 
         try:
             self.working_dir = game_server_config['dir']
@@ -119,25 +119,6 @@ class GameServerHandler:
             i += 1
         return False
 
-    def get_my_documents_folder(self):
-        S_OK = 0
-        CSIDL_MYDOCUMENTS = 5
-        SHGFP_TYPE_CURRENT = 0
-
-        _SHGetFolderPath = ctypes.windll.shell32.SHGetFolderPathW
-        _SHGetFolderPath.argtypes = [
-            ctypes.wintypes.HWND,
-            ctypes.c_int,
-            ctypes.wintypes.HANDLE,
-            ctypes.wintypes.DWORD,
-            ctypes.wintypes.LPWSTR
-        ]
-
-        buf = ctypes.create_unicode_buffer(1024)
-        if _SHGetFolderPath(0, CSIDL_MYDOCUMENTS, 0, SHGFP_TYPE_CURRENT, buf) != S_OK:
-            raise RuntimeError('For some reason requesting the location of the Documents folder failed')
-        return buf.value
-
     def server_process_watcher(self, process, server):
         self.logger.info(f'{server}: starting server process watcher')
         process.wait()
@@ -149,9 +130,7 @@ class GameServerHandler:
     def start_server_process(self, server):
         external_port = self.ports[server]
         internal_port = self.ports[f'{server}proxy']
-        log_filename = os.path.join(self.get_my_documents_folder(),
-                                    'My Games', 'Tribes Ascend',
-                                    'TribesGame', 'Logs', 'tagameserver%d.log' % external_port)
+        log_filename = os.path.join(self.data_root, 'logs', 'tagameserver%d.log' % external_port)
 
         try:
             self.logger.info(f'{server}: removing previous log file {log_filename}')
@@ -233,9 +212,10 @@ class GameServerHandler:
             self.terminate_all_servers()
 
 
-def handle_game_server(game_server_config, ports, server_handler_queue, incoming_queue):
+def handle_game_server(game_server_config, ports, server_handler_queue, incoming_queue, data_root):
     game_server_handler = GameServerHandler(game_server_config,
                                             ports,
                                             server_handler_queue,
-                                            incoming_queue)
+                                            incoming_queue,
+                                            data_root)
     game_server_handler.run()
