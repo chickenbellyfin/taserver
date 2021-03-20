@@ -107,12 +107,13 @@ class Loadouts:
 
     loadout_key2id = {v: k for k, v in loadout_id2key.items()}
 
-    def __init__(self, game_setting_mode: str):
+    def __init__(self, game_setting_mode: str, data_root: str):
         self.game_setting_mode = game_setting_mode
+        self.data_root = data_root
         self.loadout_dict = self.defaults()
 
     def defaults(self):
-        default_loadouts_file = 'data/defaults/default_loadouts_%s.json' % self.game_setting_mode
+        default_loadouts_file = os.path.join(self.data_root, 'defaults', 'default_loadouts_%s.json' % self.game_setting_mode)
         return self._load_loadout_data(default_loadouts_file)
 
     def is_loadout_menu_item(self, value):
