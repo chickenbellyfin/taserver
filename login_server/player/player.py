@@ -40,11 +40,7 @@ class Player(Peer):
     max_name_length = 15
     idle_timeout = 60
 
-    loadout_file_path = 'data/players/%s_%s_loadouts.json'
-    friends_file_path = 'data/players/%s_friends.json'
-    settings_file_path = 'data/players/%s_settings.json'
-
-    def __init__(self, address):
+    def __init__(self, address, data_root):
         super().__init__()
 
         self.logger = logging.getLogger(__name__)
@@ -60,12 +56,16 @@ class Player(Peer):
         self.is_modded: bool = False
         self.login_server = None
         self.game_server = None
-        self.loadouts: Dict[Loadouts] = {mode: Loadouts(mode) for mode in get_game_setting_modes()}
+        self.loadouts: Dict[Loadouts] = {mode: Loadouts(mode, data_root) for mode in get_game_setting_modes()}
         self.friends = Friends(self)
         self.player_settings = PlayerSettings()
         self.team = None
         self.pings = {}
         self.activity_since_last_check = True
+
+        self.loadout_file_path = os.path.join(data_root, 'players', '%s_%s_loadouts.json' )
+        self.friends_file_path = os.path.join(data_root, 'players', '%s_friends.json' )
+        self.settings_file_path = os.path.join(data_root, 'players', '%s_settings.json' )
 
         detected_ip = IPv4Address(address[0])
         if detected_ip.is_global:
