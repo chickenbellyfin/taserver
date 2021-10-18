@@ -2,6 +2,8 @@ import ctypes
 import gevent.subprocess as sp
 import os
 import subprocess
+from common.errors import FatalError
+
 
 class GameServerProcess():
   """
@@ -72,6 +74,8 @@ class WineGameServerProcess():
 
     self.process = sp.Popen(args, cwd=self.working_dir)
     self.pid = self._find_tribes_windows_pid()
+    if self.pid is None:
+      raise FatalError(f'Failed to start game server process {args}')
   
   def poll(self):
     return self.process.poll()
