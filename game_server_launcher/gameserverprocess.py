@@ -65,7 +65,8 @@ class WineGameServerProcess():
     args = ['wine', exe_path, 'server',
       f'-abslog={self.abslog}',
       f'-port={self.port}',
-      f'-controlport', str(self.control_port)
+      f'-controlport', str(self.control_port),
+      '-noportoffset'
     ]
     print(f"RUN {args}")
 
