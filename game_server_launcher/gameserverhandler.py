@@ -152,6 +152,7 @@ class GameServerHandler:
             pass
 
         process = WineGameServerProcess(
+            server=server,
             working_dir=self.working_dir, 
             abslog=os.path.abspath(log_filename),
             port=internal_port,

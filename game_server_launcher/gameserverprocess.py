@@ -53,15 +53,16 @@ class WineGameServerProcess():
   wine must be installed in the environment along with vcrun2017 from winetricks
   """
 
-  def __init__(self, working_dir, abslog, port, control_port, dll_config_path=None):
+  def __init__(self, server, working_dir, abslog, port, control_port, dll_config_path=None):
     self.working_dir = working_dir
     self.abslog = abslog
     self.port = port
     self.control_port = control_port
     self.dll_config_path = dll_config_path
+    self.server = server[-1:] # 1 or 2
 
   def start(self):
-    exe_path = os.path.join(self.working_dir, f'TribesAscend{self.port}.exe')
+    exe_path = os.path.join(self.working_dir, f'TribesAscend{self.server}.exe')
     args = ['wine', exe_path, 'server',
       f'-abslog={self.abslog}',
       f'-port={self.port}',
@@ -109,6 +110,6 @@ class WineGameServerProcess():
     print(wine_pids)
     # find process for TribesAscend.exe which matches the port number
     for line in wine_pids.split('\n'):
-      if 'TribesAscend' in line and str(self.port) in line:
+      if f'TribesAscend{self.server}' in line:
         # First column in line is wpid
         return int(line.strip().split(' ')[0], 16)
