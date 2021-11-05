@@ -2,6 +2,7 @@ import ctypes
 import gevent.subprocess as sp
 import os
 import subprocess
+import time
 from common.errors import FatalError
 
 
@@ -53,13 +54,14 @@ class WineGameServerProcess():
   wine must be installed in the environment along with vcrun2017 from winetricks
   """
 
-  def __init__(self, server, working_dir, abslog, port, control_port, dll_config_path=None):
+  def __init__(self, server, working_dir, abslog, port, control_port, dll_config_path=None, wait_time_secs=5):
     self.working_dir = working_dir
     self.abslog = abslog
     self.port = port
     self.control_port = control_port
     self.dll_config_path = dll_config_path
     self.server = server[-1:] # 1 or 2
+    self.wait_time_secs = int(wait_time_secs)
 
   def start(self):
     exe_path = os.path.join(self.working_dir, f'TribesAscend{self.server}.exe')
@@ -75,7 +77,16 @@ class WineGameServerProcess():
       args.extend(['-tamodsconfig', self.dll_config_path])
 
     self.process = sp.Popen(args, cwd=self.working_dir)
-    self.pid = self._find_tribes_windows_pid()
+    
+    # sometimes the wine process does not get shown immediately
+    self.pid = None
+    start_time = time.time()
+    while time.time() < start_time + self.wait_time_secs:
+      self.pid = self._find_tribes_windows_pid()
+      if self.pid is not None:
+        break
+      time.sleep(1)
+
     if self.pid is None:
       raise FatalError(f'Failed to start game server process {args}')
   
