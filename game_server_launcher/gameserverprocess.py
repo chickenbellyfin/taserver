@@ -1,6 +1,7 @@
 import ctypes
 import gevent.subprocess as sp
 import os
+import signal
 import subprocess
 import time
 from common.errors import FatalError
@@ -100,11 +101,11 @@ class WineGameServerProcess():
     self.process.terminate()
 
   def freeze(self):
-    # TODO
+    self.process.send_signal(signal.SIGSTOP)
     return True
 
   def unfreeze(self):
-    # TODO
+    self.process.send_signal(signal.SIGCONT)
     return True
 
   def _find_tribes_windows_pid(self):
