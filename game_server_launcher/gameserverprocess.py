@@ -1,8 +1,8 @@
 import ctypes
 import gevent.subprocess as sp
 import os
-from .inject import inject
 
+from .inject import inject
 
 class GameServerProcess():
   """
