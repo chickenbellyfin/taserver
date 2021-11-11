@@ -41,7 +41,7 @@ class WineGameServerProcess():
     # By creating an exe with the port in the name, we can identify and inject the right process.
     if not os.path.exists(self.tribes_exe):
       print(f"Creating link for {self.tribes_exe}")
-      os.path.link(os.path.join(self.working_dir, 'TribesAscend.exe'), self.tribes_exe)
+      os.link(os.path.join(self.working_dir, 'TribesAscend.exe'), self.tribes_exe)
 
     # Starting with wineconsole instead of wine saves > 300MB of memory
     args = ['wineconsole', self.tribes_exe, 'server',
