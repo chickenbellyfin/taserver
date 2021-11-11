@@ -24,6 +24,7 @@ import os
 import time
 
 from .gameserverprocess import GameServerProcess
+from .winegameserverprocess import WineGameServerProcess
 from common.errors import FatalError
 from common.geventwrapper import gevent_spawn
 
@@ -77,8 +78,15 @@ class GameServerHandler:
             self.dll_to_inject = game_server_config['controller_dll']
             self.dll_config_path = os.path.join(data_root, game_server_config['controller_config'])
             self.use_external_port = game_server_config.getboolean('use_external_port', False)
+            self.process_type = game_server_config.get('process_type', 'default')
+            if self.process_type == 'wine':
+                self.injector_exe = game_server_config['injector_exe']
         except KeyError as e:
             raise ConfigurationError("%s is a required configuration item under [gameserver]" % str(e))
+
+        if self.process_type not in ('default', 'wine'):
+            raise ConfigurationError(
+                f"Invalid process_type \"{self.process_type}\" specified under [gameserver]")
 
         self.exe_path = os.path.join(self.working_dir, 'TribesAscend.exe')
 
@@ -146,15 +154,29 @@ class GameServerHandler:
             pass
 
         self.logger.info(f'{server}: starting a new TribesAscend server on port {external_port}...')
-        process = GameServerProcess(
-            working_dir=self.working_dir, 
-            abslog=os.path.abspath(log_filename),
-            port=internal_port,
-            control_port=self.ports['game2launcher'],
-            dll_to_inject=self.dll_to_inject,
-            dll_config_path=self.dll_config_path,
-            use_external_port=self.use_external_port
-        )
+        
+        if self.process_type == 'default':
+            process = GameServerProcess(
+                working_dir=self.working_dir, 
+                abslog=os.path.abspath(log_filename),
+                port=internal_port,
+                control_port=self.ports['game2launcher'],
+                dll_to_inject=self.dll_to_inject,
+                dll_config_path=self.dll_config_path,
+                use_external_port=self.use_external_port
+            )
+        elif self.process_type == 'wine':
+            process = WineGameServerProcess(
+                working_dir=self.working_dir,
+                abslog=os.path.abspath(log_filename),
+                port=internal_port,
+                control_port=self.ports['game2launcher'],
+                injector_path=self.injector_exe,
+                dll_to_inject=self.dll_to_inject,
+                dll_config_path=self.dll_config_path,
+                use_external_port=self.use_external_port
+            )
+
         self.servers[server] = process
         process.start()
         self.logger.info(f'{server}: started process with pid {process.pid}')
