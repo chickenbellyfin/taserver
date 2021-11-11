@@ -23,8 +23,6 @@ import logging
 import os
 import time
 
-from .gameserverprocess import GameServerProcess
-from .winegameserverprocess import WineGameServerProcess
 from common.errors import FatalError
 from common.geventwrapper import gevent_spawn
 
@@ -156,6 +154,7 @@ class GameServerHandler:
         self.logger.info(f'{server}: starting a new TribesAscend server on port {external_port}...')
         
         if self.process_type == 'default':
+            from .gameserverprocess import GameServerProcess
             process = GameServerProcess(
                 working_dir=self.working_dir, 
                 abslog=os.path.abspath(log_filename),
@@ -166,6 +165,7 @@ class GameServerHandler:
                 use_external_port=self.use_external_port
             )
         elif self.process_type == 'wine':
+            from .winegameserverprocess import WineGameServerProcess
             process = WineGameServerProcess(
                 working_dir=self.working_dir,
                 abslog=os.path.abspath(log_filename),
