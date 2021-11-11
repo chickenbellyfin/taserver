@@ -18,14 +18,12 @@
 # along with taserver.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import ctypes.wintypes
 import gevent
-import gevent.subprocess as sp
 import logging
 import os
 import time
 
-from .inject import inject
+from .gameserverprocess import GameServerProcess
 from common.errors import FatalError
 from common.geventwrapper import gevent_spawn
 
@@ -148,20 +146,18 @@ class GameServerHandler:
             pass
 
         self.logger.info(f'{server}: starting a new TribesAscend server on port {external_port}...')
-        args = [self.exe_path, 'server',
-                '-abslog=%s' % os.path.abspath(log_filename),
-                '-port=%d' % internal_port,
-                '-controlport', str(self.ports['game2launcher'])]
-        if self.dll_config_path is not None:
-            args.extend(['-tamodsconfig', self.dll_config_path])
-        # By default, TAMods-server will listen on port-100/tcp. If udpproxy is not running,
-        # -noportoffset will allow TAMods server to still listen on the same port as the game server's udp.
-        if self.use_external_port:
-            args.extend(['-noportoffset'])
-        process = sp.Popen(args, cwd=self.working_dir)
+        process = GameServerProcess(
+            working_dir=self.working_dir, 
+            abslog=os.path.abspath(log_filename),
+            port=internal_port,
+            control_port=self.ports['game2launcher'],
+            dll_to_inject=self.dll_to_inject,
+            dll_config_path=self.dll_config_path,
+            use_external_port=self.use_external_port
+        )
         self.servers[server] = process
+        process.start()
         self.logger.info(f'{server}: started process with pid {process.pid}')
-
         # Check if it doesn't exit right away
         time.sleep(2)
         ret_code = process.poll()
@@ -174,7 +170,7 @@ class GameServerHandler:
             self.logger.warning(f'{server}: timeout waiting for log entry, continuing with injection...')
 
         self.logger.info(f'{server}: injecting game controller DLL into game server...')
-        inject(process.pid, self.dll_to_inject)
+        process.inject()
         self.logger.info(f'{server}: injection done.')
 
         self.watcher_task = gevent_spawn('gameserver process watcher for server %s' % server, self.server_process_watcher, process, server)
@@ -186,18 +182,18 @@ class GameServerHandler:
             process.terminate()
 
     def freeze_server_process(self, server):
-        pid = self.servers[server].pid
-        if not ctypes.windll.kernel32.DebugActiveProcess(pid):
-            self.logger.error(f'{server}: failed to freeze game server process {pid}')
+        process = self.servers[server]
+        if not process.freeze():
+            self.logger.error(f'{server}: failed to freeze game server process {process.pid}')
         else:
-            self.logger.info(f'{server}: game server process {pid} frozen')
+            self.logger.info(f'{server}: game server process {process.pid} frozen')
 
     def unfreeze_server_process(self, server):
-        pid = self.servers[server].pid
-        if not ctypes.windll.kernel32.DebugActiveProcessStop(pid):
-            self.logger.error(f'{server}: failed to unfreeze game server process {pid}')
+        process = self.servers[server]
+        if not process.unfreeze():
+            self.logger.error(f'{server}: failed to unfreeze game server process {process.pid}')
         else:
-            self.logger.info(f'{server}: game server process {pid} unfrozen')
+            self.logger.info(f'{server}: game server process {process.pid} unfrozen')
 
     def terminate_all_servers(self):
         existing_servers = self.servers
