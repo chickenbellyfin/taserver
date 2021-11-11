@@ -17,7 +17,7 @@ class WineGameServerProcess():
     abslog,
     port,
     control_port,
-    injector_exe,
+    injector_path,
     dll_to_inject,
     dll_config_path=None,
     use_external_port=False,
@@ -32,8 +32,8 @@ class WineGameServerProcess():
     self.dll_config_path = dll_config_path
     self.wait_time_secs = int(wait_time_secs)
     self.use_external_port = use_external_port
-    self.tribes_exe = os.path.join(self.working_dir, f'TribesAscend{self.server}.exe')
-    self.injector_path = injector_exe
+    self.tribes_exe = os.path.join(self.working_dir, f'TribesAscend{self.port}.exe')
+    self.injector_path = injector_path
 
   def start(self):
     # Create hard link TribesAscend.exe -> TribesAscend<port>.exe 
@@ -41,7 +41,7 @@ class WineGameServerProcess():
     # By creating an exe with the port in the name, we can identify and inject the right process.
     if not os.path.exists(self.tribes_exe):
       print(f"Creating link for {self.tribes_exe}")
-      os.path.link(os.path.join(self.working_dir, 'TribesAscend.exe'), self.tribes_exe)
+      os.link(os.path.join(self.working_dir, 'TribesAscend.exe'), self.tribes_exe)
 
     # Starting with wineconsole instead of wine saves > 300MB of memory
     args = ['wineconsole', self.tribes_exe, 'server',
