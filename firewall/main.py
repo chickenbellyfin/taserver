@@ -49,7 +49,6 @@ def main():
 
     ports = Ports(int(config['shared']['port_offset']))
     use_iptables = config['shared'].getboolean('use_iptables', False)
-    print(f'use iptabnles {use_iptables}')
     udpproxy_enabled = not use_iptables
 
     if udpproxy_enabled:
