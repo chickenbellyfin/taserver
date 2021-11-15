@@ -74,7 +74,8 @@ class IPTablesBlacklist(IPTables):
   """ iptables based firewall for taserver's login server
 
   We add a new chain called taserver-blacklist. The chain has no default policy so will return to
-  INPUT. When a player is banned, we add a rule which matches the IP -> DROP.
+  INPUT. It is assumed that the INPUT chain has a default policy of ACCEPT. When a player is banned,
+  we add a rule which matches the IP -> DROP.
 
   We add a rule to the INPUT chain to forward traffic from client2login to taserver-blacklist chain.
   """
@@ -99,7 +100,7 @@ class IPTablesBlacklist(IPTables):
       Rule(protocol='tcp', ports=self.ports, target='DROP', ip_address=ip_address)
     )
 
-  def remove_all(self):
+  def remove_all(self) -> None:
     self.logger.info(f'{self.chain}: Removing all blacklist rules')
     forward_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
     
@@ -112,7 +113,7 @@ class IPTablesBlacklist(IPTables):
     # Delete the blacklist chain if it exists
     self.iptables(Commands.DELETE_CHAIN, self.chain, quiet=True)
 
-  def reset(self):
+  def reset(self) -> None:
     self.logger.info(f'{self.chain}: Resetting all iptables rules')
     forward_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
     self.remove_all()
@@ -149,7 +150,7 @@ class IPTablesWhitelist(IPTables):
     # name of the chain for this instance of game_server_launcher
     self.chain = f'taserver-whitelist-{ports.portOffset}'
 
-  def add(self, ip_address: str):
+  def add(self, ip_address: str) -> None:
     self.logger.info(f'{self.chain}: Adding accept rule for {ip_address}')
     tcp_rule = Rule(protocol='tcp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
     udp_rule = Rule(protocol='udp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
@@ -162,7 +163,7 @@ class IPTablesWhitelist(IPTables):
     if self.iptables(Commands.CHECK_RULE, self.chain, udp_rule) != 0:
       self.iptables(Commands.INSERT_RULE, self.chain, udp_rule)
 
-  def remove(self, ip_address: str):    
+  def remove(self, ip_address: str) -> None:    
     self.logger.info(f'{self.chain}: Removing accept rule for {ip_address}')
     tcp_rule = Rule(protocol='tcp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
     udp_rule = Rule(protocol='udp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
@@ -171,7 +172,7 @@ class IPTablesWhitelist(IPTables):
     self.iptables(Commands.DELETE_RULE, self.chain, tcp_rule)
     self.iptables(Commands.DELETE_RULE, self.chain, udp_rule)
 
-  def remove_all(self):
+  def remove_all(self) -> None:
     self.logger.info(f'{self.chain}: Removing all whitelist rules')
     forward_tcp_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
     forward_udp_rule = Rule(protocol='udp', ports=self.ports, target=self.chain)
@@ -185,7 +186,7 @@ class IPTablesWhitelist(IPTables):
     self.iptables(Commands.FLUSH_CHAIN, self.chain, quiet=True)
     self.iptables(Commands.DELETE_CHAIN, self.chain, quiet=True)
 
-  def reset(self):
+  def reset(self) -> None:
     self.logger.info(f'{self.chain}: Resetting all whitelist rules')
     self.remove_all()
 
