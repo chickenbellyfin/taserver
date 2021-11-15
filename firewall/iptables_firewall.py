@@ -198,7 +198,7 @@ class IPTablesWhitelist(IPTables):
     # Create new taserver chain with default rule to drop all traffic
     self.iptables(Commands.NEW_CHAIN, self.chain)
     self.iptables(Commands.APPEND_RULE, self.chain, Rule(target='DROP'))
-    self.iptables(Commands.INSERT_RULE, self.chain, Rule(ip_address='127.0.0.1'))
+    self.iptables(Commands.INSERT_RULE, self.chain, Rule(ip_address='127.0.0.1', target='ACCEPT'))
 
     # Forward this game server's traffic from INPUT chain to taserver chain
     if self.iptables(Commands.CHECK_RULE, self.input_chain, forward_tcp_rule) != 0:
