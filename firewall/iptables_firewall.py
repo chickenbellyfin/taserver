@@ -1,100 +1,41 @@
 from ipaddress import ip_address
-import ipaddress
-from common.ports import Ports
+from logging import Logger
+import logging
 import subprocess
-import sys
-from collections import namedtuple
+from typing import List, NamedTuple
 
-from multiprocessing.connection import Listener
+from gevent.queue import Queue
 
-
-Rule = namedtuple('Rule', 'protocol, ports, target, ip_address', defaults=(None, None, None, None))
-
-class Commands():
-  # https://linux.die.net/man/8/iptables
-  APPEND_RULE = '-A'
-  INSERT_RULE = '-I'
-  DELETE_RULE = '-D'
-  NEW_CHAIN = '-N'
-  FLUSH_CHAIN = '-F'
-  DELETE_CHAIN = '-X'
-  CHECK_RULE = '-C'
+from common.logging import set_up_logging
+from common.ports import Ports
 
 
-class GameServerFirewall():
-  """ iptables based firewall for taserver's game_server_launcher
-  We create new chain in iptables named taserver-$OFFSET. This chain will have a default policy
-  of DROP. When a player is connected, we will add a rule which matches that's player's IP -> ACCEPT
-  Then we add rules tp the INPUT chain to forward traffic for the game server's ports (7777,7778,9002)+$OFFSET
-  to the taserver-$OFFSET chain.
-  """
+class Rule(NamedTuple):
+  protocol: str = None
+  ports: List[str] = None
+  target: str = None
+  ip_address: str = None
 
-  def __init__(self, ports):
-    self.ports = ports
-    self.port_range = ','.join([
-      str(ports['gameserver1']), str(self.ports['gameserver2']), str(self.ports['game2launcher'])
-    ])
 
-    # The chain from which we forward traffic to the offset-specific chain
-    self.input_chain = 'INPUT'
-    # name of the chain for this instance of game_server_launcher
-    self.chain = f'taserver-{ports.portOffset}'
+class IPTables:
 
-  def add(self, ip_address):
-    print(f'Adding accept rule for {ip_address}')
-    tcp_rule = Rule(protocol='tcp', ports=self.port_range, target='ACCEPT', ip_address=ip_address)
-    udp_rule = Rule(protocol='udp', ports=self.port_range, target='ACCEPT', ip_address=ip_address)
-    
-    # Prepend rules to accept TCP & UDP traffic from this IP
-    # Check if rules already exist to avoid duplicates
-    if self._iptables(Commands.CHECK_RULE, self.chain, tcp_rule) != 0:
-      self._iptables(Commands.INSERT_RULE, self.chain, tcp_rule)
+  def __init__(self, logger: Logger):
+    self.logger = logger
 
-    if self._iptables(Commands.CHECK_RULE, self.chain, udp_rule) != 0:
-      self._iptables(Commands.INSERT_RULE, self.chain, udp_rule)
-
-  def remove(self, ip_address):    
-    print(f'Removing accept rule for {ip_address}')
-    tcp_rule = Rule(protocol='tcp', ports=self.port_range, target='ACCEPT', ip_address=ip_address)
-    udp_rule = Rule(protocol='udp', ports=self.port_range, target='ACCEPT', ip_address=ip_address)
-
-    # Delete rules to accept traffic from this IP
-    self._iptables(Commands.DELETE_RULE, self.chain, tcp_rule)
-    self._iptables(Commands.DELETE_RULE, self.chain, udp_rule)
-
-  def reset(self):
-    print(f'Resetting all iptables rules')
-    forward_tcp_rule = Rule(protocol='tcp', ports=self.port_range, target=self.chain)
-    forward_udp_rule = Rule(protocol='udp', ports=self.port_range, target=self.chain)
-
-    # Delete forwarding rules from INPUT, if it exists
-    # Suppress error output since these rules may not exist
-    self._iptables(Commands.DELETE_RULE, self.input_chain, forward_tcp_rule, quiet=True)
-    self._iptables(Commands.DELETE_RULE, self.input_chain, forward_udp_rule, quiet=True)
-
-    # Delete the taserver chain, if it exists
-    self._iptables(Commands.FLUSH_CHAIN, self.chain, quiet=True)
-    self._iptables(Commands.DELETE_CHAIN, self.chain, quiet=True)
-
-    # Create new taserver chain with default rule to drop all traffic
-    self._iptables(Commands.NEW_CHAIN, self.chain)
-    self._iptables(Commands.APPEND_RULE, self.chain, Rule(target='DROP'))
-
-    # Forward this game server's traffic from INPUT chain to taserver chain
-    if self._iptables(Commands.CHECK_RULE, self.input_chain, forward_tcp_rule) != 0:
-      self._iptables(Commands.INSERT_RULE, self.input_chain, forward_tcp_rule)
-    
-    if self._iptables(Commands.CHECK_RULE, self.input_chain, forward_udp_rule) != 0:
-      self._iptables(Commands.INSERT_RULE, self.input_chain, forward_udp_rule)
-
-  def _iptables(self, command, chain, rule=Rule(), quiet=False):
-    args = ['iptables', command, chain]
+  def iptables(self, command: str, chain: str, rule: Rule = Rule(), quiet: bool = False) -> int:
+    args = ['iptables', '-w', command, chain]
 
     if rule.protocol:
       args += ['-p', rule.protocol]
-
-    if rule.ports:
-      args += ['-m', 'multiport', '--dport', rule.ports]
+    
+    if rule.ports is not None:
+      if len(rule.ports) == 1:
+        args += ['--dport', rule.ports[0]]
+      elif len(rule.ports) > 1:
+        args += ['-m', 'multiport', '--dport', ','.join(rule.ports)]
+      else:
+        self.logger.error(f'Must specify at least 1 port or None in {rule}')
+        return 1
 
     if rule.target:
       args += ['-j', rule.target]
@@ -109,37 +50,198 @@ class GameServerFirewall():
       stderr = None
 
     try:
-      return subprocess.call(args, stderr=stderr)
+      cmd = " ".join(args)
+      result = subprocess.call(args, stderr=stderr)
+      logging.info(f'\t\t\t{cmd} => {result}')
+      return result
     except Exception as e:
-      print(f'Error while running {args}: {repr(e)}')
+      self.logger.error(f'Error while running {args}: {repr(e)}')
+      return 1
+
+
+class Commands():
+  # https://linux.die.net/man/8/iptables
+  APPEND_RULE = '-A'
+  INSERT_RULE = '-I'
+  DELETE_RULE = '-D'
+  NEW_CHAIN = '-N'
+  FLUSH_CHAIN = '-F'
+  DELETE_CHAIN = '-X'
+  CHECK_RULE = '-C'
+
+
+class IPTablesBlacklist(IPTables):
+  """ iptables based firewall for taserver's login server
+
+  We add a new chain called taserver-blacklist. The chain has no default policy so will return to
+  INPUT. When a player is banned, we add a rule which matches the IP -> DROP.
+
+  We add a rule to the INPUT chain to forward traffic from client2login to taserver-blacklist chain.
+  """
   
+  def __init__(self, logger: Logger, ports: Ports):
+    super().__init__(logger)
+    self.ports = [str(ports['client2login'])]
+    self.input_chain = 'INPUT'
+    self.chain = f'taserver-blacklist'
 
-def main():
-  offset = int(sys.argv[1])
-  ports = Ports(portOffset=offset)
-  firewall = GameServerFirewall(ports)
+  def add(self, ip_address: str) -> None:
+    self.logger.info(f'{self.chain}: Adding drop rule for {ip_address}')
+    rule = Rule(protocol='tcp', ports=self.ports, target='DROP', ip_address=ip_address)
+    if self.iptables(Commands.CHECK_RULE, self.chain, rule) != 0:
+      self.iptables(Commands.APPEND_RULE, self.chain, rule)
 
-  listener = Listener(('localhost', 6000))
-  while True:
-    try:
-      with listener.accept() as connection:
-        command = connection.recv()
-        action = command['action']
+  def remove(self, ip_address: str) -> None:
+    self.logger.info(f'{self.chain}: Removing drop rule for {ip_address}')
+    self.iptables(
+      Commands.DELETE_RULE,
+      self.chain,
+      Rule(protocol='tcp', ports=self.ports, target='DROP', ip_address=ip_address)
+    )
+
+  def remove_all(self):
+    self.logger.info(f'{self.chain}: Removing all blacklist rules')
+    forward_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
+    
+    # Delete forwarding rule from INPUT, if it exists
+    # Suppress error output since the rule may not exist
+    self.iptables(Commands.DELETE_RULE, self.input_chain, forward_rule, quiet=True)
+
+    # Delete the blacklist chain if it exists
+    self.iptables(Commands.FLUSH_CHAIN, self.chain, quiet=True)
+    # Delete the blacklist chain if it exists
+    self.iptables(Commands.DELETE_CHAIN, self.chain, quiet=True)
+
+  def reset(self):
+    self.logger.info(f'{self.chain}: Resetting all iptables rules')
+    forward_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
+    self.remove_all()
+
+    self.logger.info(f'{self.chain}: Setting up blacklist rules')
+    # Create the blacklist chain
+    self.iptables(Commands.NEW_CHAIN, self.chain, quiet=True)
+    
+    if self.iptables(Commands.CHECK_RULE, self.input_chain, forward_rule) != 0:
+      self.iptables(Commands.INSERT_RULE, self.input_chain, forward_rule)
+
+
+class IPTablesWhitelist(IPTables):
+  """ iptables based firewall for taserver's game_server_launcher
+
+  We create a new chain called taserver-whitelist-$OFFSET. When a player is connected, we will add 
+  a rule which matches that player's IP -> ACCEPT. The default policy for this chain is DROP
+
+  We add rules to the INPUT chain to forward traffic for gameserver1, gameserver2, game2launcher to
+  the taserver-whitelist chain.
+  """
+
+  def __init__(self, logger: Logger, ports: Ports):
+    super().__init__(logger)
+    self.ports = list({
+      str(ports['gameserver1']),
+      str(ports['gameserver2']),
+      str(ports['game2launcher']),
+      str(ports['launcherping'])
+    })
+
+    # The chain from which we forward traffic to the offset-specific chain
+    self.input_chain = 'INPUT'
+    # name of the chain for this instance of game_server_launcher
+    self.chain = f'taserver-whitelist-{ports.portOffset}'
+
+  def add(self, ip_address: str):
+    self.logger.info(f'{self.chain}: Adding accept rule for {ip_address}')
+    tcp_rule = Rule(protocol='tcp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
+    udp_rule = Rule(protocol='udp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
+    
+    # Prepend rules to accept TCP & UDP traffic from this IP
+    # Check if rules already exist to avoid duplicates
+    if self.iptables(Commands.CHECK_RULE, self.chain, tcp_rule) != 0:
+      self.iptables(Commands.INSERT_RULE, self.chain, tcp_rule)
+
+    if self.iptables(Commands.CHECK_RULE, self.chain, udp_rule) != 0:
+      self.iptables(Commands.INSERT_RULE, self.chain, udp_rule)
+
+  def remove(self, ip_address: str):    
+    self.logger.info(f'{self.chain}: Removing accept rule for {ip_address}')
+    tcp_rule = Rule(protocol='tcp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
+    udp_rule = Rule(protocol='udp', ports=self.ports, target='ACCEPT', ip_address=ip_address)
+
+    # Delete rules to accept traffic from this IP
+    self.iptables(Commands.DELETE_RULE, self.chain, tcp_rule)
+    self.iptables(Commands.DELETE_RULE, self.chain, udp_rule)
+
+  def remove_all(self):
+    self.logger.info(f'{self.chain}: Removing all whitelist rules')
+    forward_tcp_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
+    forward_udp_rule = Rule(protocol='udp', ports=self.ports, target=self.chain)
+
+    # Delete forwarding rules from INPUT, if it exists
+    # Suppress error output since these rules may not exist
+    self.iptables(Commands.DELETE_RULE, self.input_chain, forward_tcp_rule, quiet=True)
+    self.iptables(Commands.DELETE_RULE, self.input_chain, forward_udp_rule, quiet=True)
+
+    # Delete the whitelist chain, if it exists
+    self.iptables(Commands.FLUSH_CHAIN, self.chain, quiet=True)
+    self.iptables(Commands.DELETE_CHAIN, self.chain, quiet=True)
+
+  def reset(self):
+    self.logger.info(f'{self.chain}: Resetting all whitelist rules')
+    self.remove_all()
+
+    forward_tcp_rule = Rule(protocol='tcp', ports=self.ports, target=self.chain)
+    forward_udp_rule = Rule(protocol='udp', ports=self.ports, target=self.chain)
+
+    self.logger.info(f'{self.chain}: Setting up whitelist rules')
+    # Create new taserver chain with default rule to drop all traffic
+    self.iptables(Commands.NEW_CHAIN, self.chain)
+    self.iptables(Commands.APPEND_RULE, self.chain, Rule(target='DROP'))
+
+    # Forward this game server's traffic from INPUT chain to taserver chain
+    if self.iptables(Commands.CHECK_RULE, self.input_chain, forward_tcp_rule) != 0:
+      self.iptables(Commands.INSERT_RULE, self.input_chain, forward_tcp_rule)
+    
+    if self.iptables(Commands.CHECK_RULE, self.input_chain, forward_udp_rule) != 0:
+      self.iptables(Commands.INSERT_RULE, self.input_chain, forward_udp_rule)
+
+
+class IPTablesFirewall():
+
+  def __init__(self, ports: Ports, data_root: str) -> None:
+    set_up_logging(data_root, 'taserver_firewall.log')
+    self.logger = logging.getLogger('firewall')
+    self.blacklist = IPTablesBlacklist(self.logger, ports)
+    self.whitelist = IPTablesWhitelist(self.logger, ports)
+
+  
+  def remove_all_rules(self) -> None:
+    self.logger.info(f'Removing all firewall rules')
+    self.blacklist.remove_all()
+    self.whitelist.remove_all()
+  
+  def run(self, server_queue: Queue) -> None:
+    lists = {
+      'whitelist': self.whitelist,
+      'blacklist': self.blacklist
+    }
+
+    self.blacklist.reset()
+    self.whitelist.reset()
+
+    while True:
+      try:
+        command = server_queue.get()
+        thelist = lists[command['list']]
+
         if command['action'] == 'reset':
-          firewall.reset()
+            thelist.reset()
         elif command['action'] == 'add':
-          ip = str(ip_address(command['ip']))
-          firewall.add(ip)
+            ip = str(ip_address(command['ip']))
+            thelist.add(ip)
         elif command['action'] == 'remove':
-          ip = str(ip_address(command['ip']))
-          firewall.add(ip)
+            ip = str(ip_address(command['ip']))
+            thelist.remove(ip)
         else:
-          print(f'Command "{action}" is not valid')
-
-    except Exception as e:
-      import traceback
-      traceback.print_exc()
-      print(f'Connection failed with: {repr(e)}')
-
-if __name__ == '__main__':
-  main()
+            self.logger.error('Invalid action received: %s' % command['action'])
+      except Exception as e:
+        self.logger.error(f'Exception while handling command: {repr(e)}')

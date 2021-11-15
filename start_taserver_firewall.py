@@ -1,3 +1,3 @@
-from firewall import iptables_firewall
+from firewall import main
 
-iptables_firewall.main()
+main.main()
