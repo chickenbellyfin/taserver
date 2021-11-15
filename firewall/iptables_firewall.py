@@ -52,7 +52,7 @@ class IPTables:
     try:
       cmd = " ".join(args)
       result = subprocess.call(args, stderr=stderr)
-      logging.info(f'\t\t\t{cmd} => {result}')
+      logging.debug(f'{cmd} => {result}')
       return result
     except Exception as e:
       self.logger.error(f'Error while running {args}: {repr(e)}')
