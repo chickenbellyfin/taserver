@@ -295,7 +295,7 @@ class GameServer(Peer):
         votes = [v for v in eligible_voters_votes.values() if v is not None]
         yes_votes = [v for v in votes if v]
 
-        vote_passed = len(votes) >= 4 and (len(yes_votes) / len(votes)) > required_majority
+        vote_passed = True #len(votes) >= 4 and (len(yes_votes) / len(votes)) > required_majority
 
         return len(eligible_voters_votes), len(votes), len(yes_votes), vote_passed
 
