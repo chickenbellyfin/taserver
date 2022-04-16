@@ -59,7 +59,7 @@ class GameServerTerminatedMessage:
 
 class GameServerHandler:
 
-    def __init__(self, game_server_config, ports, server_handler_queue, launcher_queue, data_root):
+    def __init__(self, game_server_config, shared_config, ports, server_handler_queue, launcher_queue, data_root):
         gevent.getcurrent().name = 'gameserver'
 
         self.servers = {}
@@ -75,16 +75,11 @@ class GameServerHandler:
             self.working_dir = game_server_config['dir']
             self.dll_to_inject = game_server_config['controller_dll']
             self.dll_config_path = os.path.join(data_root, game_server_config['controller_config'])
-            self.platform = game_server_config.get('platform', 'windows')
-            self.process_type = game_server_config.get('process_type', 'default')
-            if self.process_type == 'wine':
+            self.platform = shared_config.get('platform', 'windows')
+            if self.platform == 'linux':
                 self.injector_exe = game_server_config['injector_exe']
         except KeyError as e:
             raise ConfigurationError("%s is a required configuration item under [gameserver]" % str(e))
-
-        if self.process_type not in ('default', 'wine'):
-            raise ConfigurationError(
-                f"Invalid process_type \"{self.process_type}\" specified under [gameserver]")
 
         self.exe_path = os.path.join(self.working_dir, 'TribesAscend.exe')
 
@@ -153,7 +148,7 @@ class GameServerHandler:
 
         self.logger.info(f'{server}: starting a new TribesAscend server on port {external_port}...')
         
-        if self.process_type == 'default':
+        if self.platform == 'windows':
             from .gameserverprocess import GameServerProcess
             process = GameServerProcess(
                 working_dir=self.working_dir, 
@@ -163,7 +158,7 @@ class GameServerHandler:
                 dll_to_inject=self.dll_to_inject,
                 dll_config_path=self.dll_config_path
             )
-        elif self.process_type == 'wine':
+        elif self.platform == 'linux':
             from .winegameserverprocess import WineGameServerProcess
             process = WineGameServerProcess(
                 working_dir=self.working_dir,
@@ -239,8 +234,9 @@ class GameServerHandler:
             self.terminate_all_servers()
 
 
-def handle_game_server(game_server_config, ports, server_handler_queue, incoming_queue, data_root):
+def handle_game_server(game_server_config, shared_config, ports, server_handler_queue, incoming_queue, data_root):
     game_server_handler = GameServerHandler(game_server_config,
+                                            shared_config,
                                             ports,
                                             server_handler_queue,
                                             incoming_queue,
