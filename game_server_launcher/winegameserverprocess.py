@@ -20,7 +20,6 @@ class WineGameServerProcess():
     injector_path,
     dll_to_inject,
     dll_config_path=None,
-    use_external_port=False,
     wait_time_secs=5,
     ):
 
@@ -31,7 +30,6 @@ class WineGameServerProcess():
     self.dll_to_inject = dll_to_inject
     self.dll_config_path = dll_config_path
     self.wait_time_secs = int(wait_time_secs)
-    self.use_external_port = use_external_port
     self.tribes_exe = os.path.join(self.working_dir, f'TribesAscend{self.port}.exe')
     self.injector_path = injector_path
 
@@ -53,11 +51,6 @@ class WineGameServerProcess():
 
     if self.dll_config_path is not None:
       args.extend(['-tamodsconfig', self.dll_config_path])
-    
-    # By default, TAMods-server will listen on port-100/tcp. If udpproxy is not running,
-    # -noportoffset will allow TAMods server to still listen on the same port as the game server's udp.
-    if self.use_external_port:
-      args.extend(['-noportoffset'])
 
     print(f"Starting game server with command: {args}")
     self.process = sp.Popen(args, cwd=self.working_dir)

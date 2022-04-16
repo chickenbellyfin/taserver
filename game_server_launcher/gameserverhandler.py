@@ -161,8 +161,7 @@ class GameServerHandler:
                 port=internal_port,
                 control_port=self.ports['game2launcher'],
                 dll_to_inject=self.dll_to_inject,
-                dll_config_path=self.dll_config_path,
-                use_external_port=self.use_external_port
+                dll_config_path=self.dll_config_path
             )
         elif self.process_type == 'wine':
             from .winegameserverprocess import WineGameServerProcess
@@ -173,8 +172,7 @@ class GameServerHandler:
                 control_port=self.ports['game2launcher'],
                 injector_path=self.injector_exe,
                 dll_to_inject=self.dll_to_inject,
-                dll_config_path=self.dll_config_path,
-                use_external_port=self.use_external_port
+                dll_config_path=self.dll_config_path
             )
 
         self.servers[server] = process
