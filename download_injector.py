@@ -24,7 +24,7 @@ import urllib.request as urlreq
 
 
 target_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'InjectorStandalone.exe')
-download_url = 'https://github.com/chickenbellyfin/TribesLauncherSharp/releases/download/v0.0.1/InjectorStandalone.exe'
+download_url = 'https://github.com/chickenbellyfin/TribesLauncherSharp/releases/download/v0.0.2/InjectorStandalone.exe'
 
 
 class UserError(Exception):
