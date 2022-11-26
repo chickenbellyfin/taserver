@@ -90,7 +90,6 @@ class Message:
         msg_id = struct.unpack('<H', data[0:2])[0]
         if msg_id != cls.msg_id:
             raise ValueError('Cannot parse object of this type from these bytes')
-
         members = json.loads(data[2:])
         return cls(**members)
 
@@ -133,7 +132,7 @@ class Login2LauncherProtocolVersionMessage(Message):
 class Login2LauncherAddPlayer(Message):
     msg_id = _MSGID_LOGIN2LAUNCHER_ADD_PLAYER
 
-    def __init__(self, unique_id: int, display_name: str, ip: str, rank_xp: int, eligible_for_first_win: bool):
+    def __init__(self, unique_id: int, ip: str, rank_xp: int, eligible_for_first_win: bool, display_name: str = None):
         self.unique_id = unique_id
         self.display_name = display_name
         self.ip = ip
