@@ -27,6 +27,7 @@ from common.errors import FatalError
 from common.firewall import FirewallClient
 from common.ipaddresspair import IPAddressPair
 from common.messages import *
+from common import iplog
 from common.connectionhandler import PeerConnectedMessage, PeerDisconnectedMessage
 from common.statetracer import statetracer, TracingDict
 from common.pendingcallbacks import PendingCallbacks, ExecuteCallbackMessage
@@ -278,6 +279,7 @@ class Launcher:
     def handle_add_player_message(self, msg):
         if msg.ip:
             self.logger.info('launcher: login server added player %d (%s) with ip %s' % (msg.unique_id, msg.display_name, msg.ip))
+            iplog.add(msg.ip, msg.unique_id, msg.display_name)
             self.firewall.modify_firewall('whitelist', 'add', msg.unique_id, msg.ip)
         else:
             self.logger.info('launcher: login server added local player %d' % msg.unique_id)
