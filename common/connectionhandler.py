@@ -26,7 +26,18 @@ import logging
 from common.errors import PortInUseError
 from common.geventwrapper import gevent_spawn
 from common.tcpmessage import TcpMessageReader, TcpMessageWriter
+from prometheus_client import Counter
 
+messages_count = Counter(
+    name="tcp_message_count",
+    documentation="Number of tcp messages",
+    labelnames=('address', 'direction')
+)
+messages_size = Counter(
+    name="tcp_message_bytes",
+    documentation="Size of tcp messages",
+    labelnames=('address', 'direction')
+)
 
 class PeerConnectedMessage:
     def __init__(self, peer):
@@ -55,7 +66,10 @@ class ConnectionReader:
         try:
             while True:
                 msg_bytes = self.receive()
+
                 msg = self.decode(msg_bytes)
+                messages_count.labels(address=self.peer.address[0], direction='in').inc()
+                messages_size.labels(address=self.peer.address[0], direction='in').inc(len(msg))
                 msg.peer = self.peer
                 self.incoming_queue.put(msg)
 
@@ -91,6 +105,7 @@ class ConnectionWriter:
         self.task_id = None
         self.outgoing_queue = None
         self.sock = sock
+        self.peer = None
 
     def run(self):
         gevent.getcurrent().name = self.task_name
@@ -99,6 +114,8 @@ class ConnectionWriter:
             if not isinstance(msg, PeerDisconnectedMessage):
                 try:
                     msg_bytes = self.encode(msg)
+                    messages_count.labels(address=self.peer.address[0], direction='out').inc()
+                    messages_size.labels(address=self.peer.address[0], direction='out').inc(len(msg))
                     self.send(msg_bytes)
                 except (ConnectionResetError, ConnectionAbortedError):
                     # Ignore a closed connection here. The reader will notice
@@ -195,6 +212,7 @@ class ConnectionHandler:
         writer.task_id = task_id
         writer.task_name = self.task_name
         writer.outgoing_queue = outgoing_queue
+        writer.peer = peer
 
         tasks = [
             gevent_spawn("%s(%s)'s reader" % (self.task_name, task_id), reader.run),
