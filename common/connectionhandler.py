@@ -31,12 +31,12 @@ from prometheus_client import Counter
 messages_count = Counter(
     name="tcp_message_count",
     documentation="Number of tcp messages",
-    labelnames=('address', 'direction')
+    labelnames=('address', 'direction', 'type')
 )
 messages_size = Counter(
     name="tcp_message_bytes",
     documentation="Size of tcp messages",
-    labelnames=('address', 'direction')
+    labelnames=('address', 'direction', 'type'),
 )
 
 class PeerConnectedMessage:
@@ -93,9 +93,15 @@ class TcpMessageConnectionReader(ConnectionReader):
     def __init__(self, sock, max_message_size = 0xFFFF, dump_queue = None):
         super().__init__(sock)
         self.tcp_reader = TcpMessageReader(sock, max_message_size = max_message_size, dump_queue = dump_queue)
+        self.typename = type(self).__name__
 
     def receive(self):
-        return self.tcp_reader.receive()
+        msg_bytes = self.tcp_reader.receive()
+        messages_count.labels(address=self.connection_address[0], direction='in', type=self.typename).inc()
+        messages_size.labels(address=self.connection_address[0], direction='in', type=self.typename).inc(len(msg_bytes or []))
+        if msg_bytes is None:
+            self.logger.warn(f'msg_bytes was None, {self.peer} {self.connection_address}')
+        return msg_bytes
 
 
 class ConnectionWriter:
@@ -144,8 +150,11 @@ class TcpMessageConnectionWriter(ConnectionWriter):
     def __init__(self, sock, max_message_size = 0xFFFF, dump_queue = None):
         super().__init__(sock)
         self.tcp_writer = TcpMessageWriter(sock, max_message_size = max_message_size, dump_queue = dump_queue)
+        self.typename = type(self).__name__
 
     def send(self, msg_bytes):
+        messages_count.labels(address=self.connection_address[0], direction='out', type=self.typename).inc()
+        messages_size.labels(address=self.connection_address[0], direction='out', type=self.typename).inc(len(msg_bytes))
         return self.tcp_writer.send(msg_bytes)
 
 
@@ -208,11 +217,13 @@ class ConnectionHandler:
         reader.task_name = self.task_name
         reader.incoming_queue = self.incoming_queue
         reader.peer = peer
+        reader.connection_address = address
 
         writer.task_id = task_id
         writer.task_name = self.task_name
         writer.outgoing_queue = outgoing_queue
         writer.peer = peer
+        writer.connection_address = address
 
         tasks = [
             gevent_spawn("%s(%s)'s reader" % (self.task_name, task_id), reader.run),
