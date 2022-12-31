@@ -42,6 +42,7 @@ from .httphandler import handle_http
 from .trafficdumper import TrafficDumper, dumpfilename
 from .loginserver import LoginServer
 from .webhookhandler import handle_webhook
+from prometheus_client import start_http_server
 
 
 def handle_dump(dumpqueue):
@@ -131,6 +132,9 @@ def main():
 
     if dump_queue:
         tasks.append(gevent_spawn("login server's handle_dump", handle_dump, dump_queue))
+    
+    # start metrics
+    start_http_server(9005)
 
     try:
         # Wait for any of the tasks to terminate
