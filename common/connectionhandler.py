@@ -66,10 +66,7 @@ class ConnectionReader:
         try:
             while True:
                 msg_bytes = self.receive()
-
                 msg = self.decode(msg_bytes)
-                messages_count.labels(address=self.peer.address[0], direction='in').inc()
-                messages_size.labels(address=self.peer.address[0], direction='in').inc(len(msg))
                 msg.peer = self.peer
                 self.incoming_queue.put(msg)
 
@@ -120,8 +117,6 @@ class ConnectionWriter:
             if not isinstance(msg, PeerDisconnectedMessage):
                 try:
                     msg_bytes = self.encode(msg)
-                    messages_count.labels(address=self.peer.address[0], direction='out').inc()
-                    messages_size.labels(address=self.peer.address[0], direction='out').inc(len(msg))
                     self.send(msg_bytes)
                 except (ConnectionResetError, ConnectionAbortedError):
                     # Ignore a closed connection here. The reader will notice
