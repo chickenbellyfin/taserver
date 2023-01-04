@@ -1,8 +1,10 @@
-import gevent.subprocess as sp
+import logging
 import os
 import signal
 import subprocess
 import time
+
+import gevent.subprocess as sp
 
 from common.errors import FatalError
 
@@ -34,13 +36,14 @@ class WineGameServerProcess():
         self.tribes_exe = os.path.join(
             self.working_dir, f'TribesAscend{self.port}.exe')
         self.injector_path = injector_path
+        self.logger = logging.getLogger(__name__)
 
     def start(self):
         # Create hard link TribesAscend.exe -> TribesAscend<port>.exe
         # We use winedbg to find the wpid of the process, but winedbg does not show the cli args, only the exe.
         # By creating an exe with the port in the name, we can identify and inject the right process.
         if not os.path.exists(self.tribes_exe):
-            print(f"Creating link for {self.tribes_exe}")
+            self.logger.info(f"Creating link for {self.tribes_exe}")
             os.link(os.path.join(self.working_dir,
                     'TribesAscend.exe'), self.tribes_exe)
 
@@ -55,7 +58,7 @@ class WineGameServerProcess():
         if self.dll_config_path is not None:
             args.extend(['-tamodsconfig', self.dll_config_path])
 
-        print(f"Starting game server with command: {args}")
+        self.logger.info(f"Starting game server with command: {args}")
         self.process = sp.Popen(args, cwd=self.working_dir)
 
         self.pid = None  # PID is the wine PID. We need to use this for DLL injection
@@ -111,11 +114,11 @@ class WineGameServerProcess():
                 try:
                     with open(os.path.join('/proc', pid, 'cmdline')) as cmd:
                         if cmd.read().startswith(self.tribes_exe):
-                            print(f"Found {self.tribes_exe} in /proc/{pid}")
+                            self.logger.info(f"Found {self.tribes_exe} in /proc/{pid}")
                             return int(pid)
                 except Exception as e:
                     pass
-        print(f"Did not find {self.tribes_exe} in /proc")
+        self.logger.info(f"Did not find {self.tribes_exe} in /proc")
         return None
 
     def _find_tribes_windows_pid(self):
@@ -129,7 +132,6 @@ class WineGameServerProcess():
 
         # list wine processes
         wine_pids = subprocess.check_output(['winedbg', '--command', 'info proc']).decode('utf-8')
-        print(wine_pids)
         # find process for TribesAscend.exe which matches the port number
         for line in wine_pids.split('\n'):
             if f'TribesAscend' in line and str(self.port) in line:
@@ -144,7 +146,7 @@ class WineGameServerProcess():
         """
         try:
             args = ['wine', self.injector_path, str(self.pid), self.dll_to_inject]
-            print(f"Running injector {args}")
+            self.logger.info(f"Running injector {args}")
             subprocess.call(args)
         except subprocess.CalledProcessError as e:
-            print(f'{e}: {e.output}')
+            self.logger.exception(f'{e.output}', exc_info=True)

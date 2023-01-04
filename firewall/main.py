@@ -20,6 +20,7 @@
 import argparse
 import configparser
 import json
+import logging
 import os
 import sys
 
@@ -36,9 +37,10 @@ from common.utils import get_shared_ini_path
 from .iptables_firewall import IPTablesFirewall
 from .windows_firewall import Firewall
 
+logger = logging.getLogger(__name__)
 
 def main():
-    print('Running on Python %s' % sys.version)
+    logger.info('Running on Python %s' % sys.version)
     parser = argparse.ArgumentParser()
     parser.add_argument('--data-root', action='store', default='data',
                         help='Location of the data dir containing all config files and logs.')
@@ -52,12 +54,12 @@ def main():
         config.read_file(f)
 
     if args.port_offset is not None:
-        print(f"Using port offset flag: {int(args.port_offset)}")
+        logger.info(f"Using port offset flag: {int(args.port_offset)}")
         ports = Ports(int(args.port_offset))
     else:
         ports = Ports(int(config['shared']['port_offset']))
     platform = 'windows' if os.name == 'nt' else 'linux'
-    print(f"Detected platform as {platform}")
+    logger.info(f"Detected platform as {platform}")
     use_iptables = (platform == 'linux')
     udpproxy_enabled = (platform == 'windows')
 
@@ -67,7 +69,7 @@ def main():
             udp_proxy_proc2 = sp.Popen('udpproxy.exe %d' % ports['gameserver2'])
 
         except OSError as e:
-            print('Failed to run udpproxy.exe. Run download_udpproxy.py to download it\n'
+            logger.error('Failed to run udpproxy.exe. Run download_udpproxy.py to download it\n'
                 'or build it yourself using the Visual Studio solution in the udpproxy\n'
                 'subdirectory and place it in the taserver directory.\n',
                 file=sys.stderr)

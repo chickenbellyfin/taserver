@@ -54,7 +54,7 @@ def main():
         config.read_file(f)
 
     if args.port_offset is not None:
-        print(f"Using port offset flag: {int(args.port_offset)}")
+        logger.info(f"Using port offset flag: {int(args.port_offset)}")
         ports = Ports(int(args.port_offset))
     else:
         ports = Ports(int(config['shared']['port_offset']))
