@@ -114,16 +114,16 @@ class Player(Peer):
     def load(self):
         if self.verified:
             for mode in get_game_setting_modes():
-                self.loadouts[mode].load(self.loadout_file_path % (self.login_name, mode))
-            self.friends.load(self.friends_file_path % self.login_name)
-            self.player_settings.load(self.settings_file_path % self.login_name)
+                self.loadouts[mode].load(self.loadout_file_path % (self.login_name.lower(), mode))
+            self.friends.load(self.friends_file_path % self.login_name.lower())
+            self.player_settings.load(self.settings_file_path % self.login_name.lower())
 
     def save(self):
         if self.verified:
             for mode in get_game_setting_modes():
-                self.loadouts[mode].save(self.loadout_file_path % (self.login_name, mode))
-            self.friends.save(self.friends_file_path % self.login_name)
-            self.player_settings.save(self.settings_file_path % self.login_name)
+                self.loadouts[mode].save(self.loadout_file_path % (self.login_name.lower(), mode))
+            self.friends.save(self.friends_file_path % self.login_name.lower())
+            self.player_settings.save(self.settings_file_path % self.login_name.lower())
 
     def handle_request(self, request):
         return self.state.handle_request(request)
