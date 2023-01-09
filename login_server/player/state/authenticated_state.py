@@ -28,7 +28,9 @@ from common.messages import Message, Client2LoginConnect, Client2LoginSwitchMode
     Login2AuthChatMessage, parse_message_from_string
 from .player_state import PlayerState, handles, handles_control_message
 from common import utils
+from common.token_bucket import TokenBucketPool
 
+PRIVATE_MESSAGE_TOKEN_BUCKETS = TokenBucketPool(2, 10, 'messages') # 2 messages every 10 seconds
 
 class AuthenticatedState(PlayerState):
 
@@ -38,6 +40,7 @@ class AuthenticatedState(PlayerState):
 
     def on_enter(self):
         self.logger.info("%s is entering state %s" % (self.player, type(self).__name__))
+        self.message_token_bucket = PRIVATE_MESSAGE_TOKEN_BUCKETS.get(str(self.player.address_pair))
         self.player.friends.notify_online()
 
     def on_exit(self):
@@ -227,6 +230,8 @@ class AuthenticatedState(PlayerState):
                                                                  self.player.team)
 
         elif message_type == MESSAGE_PRIVATE:
+            if not self.message_token_bucket.consume(1):
+                self.logger.warning(f'Messages rate limited for {self.player.display_name}')
             addressed_player_name = request.findbytype(m034a).value
             addressed_player = self.player.login_server.find_player_by_display_name(addressed_player_name)
             if addressed_player:

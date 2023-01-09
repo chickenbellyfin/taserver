@@ -21,7 +21,7 @@
 from common.connectionhandler import *
 from common.loginprotocol import LoginProtocolReader, LoginProtocolWriter
 from .player.player import Player
-
+from common.token_bucket import TokenBucketPool
 
 class GameClientHandler(IncomingConnectionHandler):
     def __init__(self, incoming_queue, dump_queue, data_root):
@@ -31,9 +31,10 @@ class GameClientHandler(IncomingConnectionHandler):
                          incoming_queue)
         self.dump_queue = dump_queue
         self.data_root = data_root
+        self.token_bucket_pool = TokenBucketPool(10000, 60, 'bytes') # 10KB/min per IP
 
     def create_connection_instances(self, sock, address):
-        reader = LoginProtocolReader(sock, self.dump_queue)
+        reader = LoginProtocolReader(sock, self.dump_queue, token_bucket=self.token_bucket_pool.get(address))
         writer = LoginProtocolWriter(sock, self.dump_queue)
         peer = Player(address, self.data_root)
         return reader, writer, peer
