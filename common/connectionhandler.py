@@ -94,8 +94,6 @@ class TcpMessageConnectionReader(ConnectionReader):
 
     def receive(self):
         msg_bytes = self.tcp_reader.receive()
-        messages_count.labels(address=self.connection_address[0], direction='in', type=self.typename).inc()
-        messages_size.labels(address=self.connection_address[0], direction='in', type=self.typename).inc(len(msg_bytes or []))
         if msg_bytes is None:
             self.logger.warn(f'msg_bytes was None, {self.peer} {self.connection_address}')
         return msg_bytes
